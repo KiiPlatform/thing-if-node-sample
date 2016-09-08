@@ -5,3 +5,6 @@
 /app.json
 /thing.json
 /data.json
+
+.*.swp
+main.js
