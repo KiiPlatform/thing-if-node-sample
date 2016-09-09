@@ -1,22 +1,23 @@
+//@flow
 var fs = require('fs');
 
-var kii = require('./lib/kii-cloud-sdk-v2.1.34.js').create();
+var kii = require('kii-sdk').create();
 
 var APP_JSON = './app.json';
 var THING_JSON = './thing.json';
 var DATA_JSON = './data.json';
 
-var APP = JSON.parse(fs.readFileSync(APP_JSON));
+var APP = JSON.parse(fs.readFileSync(APP_JSON).toString());
 if (APP.SITE in kii.KiiSite) {
   APP.SITE = kii.KiiSite[APP.SITE];
 }
-var THING = JSON.parse(fs.readFileSync(THING_JSON));
+var THING = JSON.parse(fs.readFileSync(THING_JSON).toString());
 
 function ts() {
   return new Date().toLocaleString();
 }
 
-function registerThing(id, password, type, savePath) {
+function registerThing(id:string, password:string, type:string, savePath:string): Promise<KiiThing> {
   return kii.KiiThing.register({
     _vendorThingID: id,
     _password: password,
@@ -47,12 +48,9 @@ function loadThing(id, password) {
   );
 }
 
-function exponentialBackoff(name, fn, maxRetry, interval, retryCount) {
+function exponentialBackoff(name, fn, maxRetry, interval, retryCount: number = 0) {
   if (interval == null) {
     interval = 1000;
-  }
-  if (retryCount == null) {
-    retryCount = 0;
   }
   return fn().then(
     function(value) {
@@ -82,7 +80,7 @@ function exponentialBackoff(name, fn, maxRetry, interval, retryCount) {
 function setupThing(thing, savePath) {
   var data;
   try {
-    data = JSON.parse(fs.readFileSync(savePath));
+    data = JSON.parse(fs.readFileSync(savePath).toString());
   } catch (err) {
   }
   var id = thing.VENDOR_ID;
@@ -96,7 +94,7 @@ function setupThing(thing, savePath) {
   }
 }
 
-function startMonitor(thing) {
+function startMonitor(thing: KiiThing) {
   var bucket = thing.bucketWithName('temperatures');
   setInterval(function() {
     var t = new Date();
@@ -172,7 +170,7 @@ function saveData(bucket, time, minend) {
   if (id === cacheID && cacheObj != null) {
     promise = updateObject(cacheObj, min, val);
   } else {
-    obj = bucket.createObjectWithID(id);
+    var obj = bucket.createObjectWithID(id);
     cacheID = id;
     cacheObj = obj;
     promise = obj.refresh().then(
