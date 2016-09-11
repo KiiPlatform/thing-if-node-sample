@@ -2,12 +2,10 @@ var fs = require('fs');
 
 var kii = require('./lib/kii-cloud-sdk-v2.1.34.js').create();
 var thingif = require('./lib/thing-if-sdk.js');
+var https = require('https');
 
 var APP_JSON = './app.json';
 var THING_JSON = './thing.json';
-var DATA_JSON = './data.json';
-// GPIO channel number. see http://elinux.org/RPi_Low-level_peripherals#Interfacing_with_GPIO_pins
-var GPIO_18 = 12
 
 var APP = JSON.parse(fs.readFileSync(APP_JSON));
 if (APP.SITE in kii.KiiSite) {
@@ -19,16 +17,13 @@ function ts() {
   return new Date().toLocaleString();
 }
 
-function registerThing(id, password, type, savePath) {
+function registerThing(id, password, type) {
   return kii.KiiThing.register({
     _vendorThingID: id,
     _password: password,
     _thingType: type
   }).then(
     function(thing) {
-      fs.writeFileSync(savePath, JSON.stringify({
-        THING_ID: thing.getThingID()
-      }));
       console.log(ts(), 'thing :', thing);
       return Promise.resolve(thing);
     },
@@ -99,28 +94,30 @@ function exponentialBackoff(name, fn, maxRetry, interval, retryCount) {
   );
 }
 
-function setupThing(thing, savePath) {
+function setupThing(thing) {
   var id = thing.VENDOR_ID;
   var pass = thing.PASSWORD;
   return loadThing(id, pass);
 }
 
-function startMonitor(thing) {
-  var BME280 = require('node-adafruit-bme280');
+function startMonitor(thing, behavior) {
   setInterval(function() {
     var t = new Date();
     var sec = t.getSeconds();
     if ((sec % 60) == 59) {
-      BME280.probe(function(temperature, pressure, humidity) {
-        saveData(thing.getThingID(), {temperature: temperature, humidity: humidity})
-      });
+      behavior.generateState()
+        .then(function(state) {
+            console.log(state);
+          saveData(thing.getThingID(), state);
+        }).catch(function(err) {
+          console.log(ts(), "error while generating state", err);
+        });
     }
   }, 1000);
   //setInterval(putDummyData, 1000);
 }
 
 function saveData(thingId, state) {
-  https = require('https');
   var path = '/thing-if/apps/'+ APP.ID + '/targets/thing:' + thingId + '/states';
   console.log("path", path);
   var req = https.request(
@@ -137,31 +134,16 @@ function saveData(thingId, state) {
       function(res) {
         console.log(ts(), 'post data status: ' + res.statusCode);
       });
+  var toType = function(obj) {
+        return ({}).toString.call(obj).match(/\s([a-zA-Z]+)/)[1].toLowerCase()
+  }
+  console.log("state type: ", toType(state));
+  console.log("state : ", state);
   req.write(JSON.stringify(state));
   req.end();
 }
 
-function blinkLED(gpio, port, count) {
-  var current = 0;
-  var on = false;
-  var id = setInterval(function() {
-      if(current == count) {
-        gpio.write(port, false);
-        clearInterval(id);
-      }
-
-      if(on) {
-        gpio.write(port, false);
-        on = false;
-      } else {
-        gpio.write(port, true);
-        on = true;
-        current++;
-      }
-  }, 300);
-}
-
-function startMQTT(onboard) {
+function startMQTT(onboard, behavior) {
   var endpoint = onboard.mqttEndPoint;
   // console.log("endpoint: ", endpoint);
   var mqtt    = require('mqtt');
@@ -177,14 +159,12 @@ function startMQTT(onboard) {
       client.subscribe(endpoint.mqttTopic);
       });
 
-  var gpio = require('rpi-gpio');
-  gpio.setup(GPIO_18, gpio.DIR_OUT);
   client.on('message', function (topic, message) {
       // message is Buffer 
       // message is like {"schema":"prototype","schemaVersion":1,"commandID":"03675d40-7509-11e6-b753-22000b07265b","actions":[{"mythingsAction":{"payload":"{\"test\":0}","id":1}}],"issuer":"user:d009f7a00022-5308-6e11-e443-0222ec98"}
       msgJSON = JSON.parse(message);
       console.log(ts(), message.toString());
-      blinkLED(gpio, GPIO_18, msgJSON.actions[0].mythingsAction.id);
+      behavior.consumeCommand(message);
     });
 }
 
@@ -192,12 +172,15 @@ function startMQTT(onboard) {
 kii.Kii.initializeWithSite(APP.ID, APP.KEY, APP.SITE);
 
 exponentialBackoff('setup', function() {
-  return setupThing(THING, DATA_JSON);
+  return setupThing(THING);
 }, 5, 1000).then(
   function(resp) {
-      console.log(ts(), resp);
-      startMQTT(resp[0]);
-      startMonitor(resp[1]);
+    console.log(ts(), resp);
+    // behavior = require('./raspberry_pi');
+    var behavior = require('./pc');
+    behavior.setup();
+    startMQTT(resp[0], behavior);
+    startMonitor(resp[1], behavior);
   },
   function(error) { console.error(ts(), 'setup failed:', error); }
 );
