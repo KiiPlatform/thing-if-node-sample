@@ -128,6 +128,7 @@ function startMonitor(thing, behavior) {
     if ((sec % 60) == 59) {
       behavior.generateState()
         .then(function(state) {
+          state.lastModified = Date.now();
           saveData(thing.getThingID(), state);
         }).catch(function(err) {
           console.log(ts(), "error while generating state", err);
