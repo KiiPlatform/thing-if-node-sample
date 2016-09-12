@@ -1,7 +1,6 @@
 var fs = require('fs');
 
 var kii = require('./lib/kii-cloud-sdk-v2.1.34.js').create();
-var thingif = require('./lib/thing-if-sdk.js');
 var https = require('https');
 
 var APP_JSON = './app.json';
@@ -17,26 +16,9 @@ function ts() {
   return new Date().toLocaleString();
 }
 
-function registerThing(id, password, type) {
-  return kii.KiiThing.register({
-    _vendorThingID: id,
-    _password: password,
-    _thingType: type
-  }).then(
-    function(thing) {
-      console.log(ts(), 'thing :', thing);
-      return Promise.resolve(thing);
-    },
-    function(error) {
-      console.error(ts(), 'error :', error);
-      return Promise.reject(error);
-    }
-  );
-}
-
-function loadThing(id, password) {
+function loadThing(vendorId, password) {
   var user = new kii.KiiUser();
-  user._username = 'VENDOR_THING_ID:' + id;
+  user._username = 'VENDOR_THING_ID:' + vendorId;
   user._password = password;
   return new Promise(function(fulfill, reject) {
     user._authenticate({
@@ -45,21 +27,60 @@ function loadThing(id, password) {
     });
   }).then(
     function(user) {
+      console.log(ts(), 'logged in as thing');
       return kii.KiiThing.loadWithVendorThingID(THING.VENDOR_ID);
     }
   ).then(
     function(thing) {
-      var apiAuthor = new thingif.APIAuthor(
-          user.getAccessToken(),
-          new thingif.App(
-            kii.Kii.getAppID(),
-            kii.Kii.getAppKey(),
-            "https://api-jp.kii.com")
-          );
-      var onboardRequest = new thingif.OnboardWithVendorThingIDRequest(id, password);
-      return Promise.all([apiAuthor.onboardWithVendorThingID(onboardRequest), thing]);
-    }
-  );
+      console.log(ts(), 'thing loaded');
+      return Promise.all(
+          [
+          new Promise(function(resolve, reject) {
+            var req = https.request(
+                {
+                  hostname: 'api-jp.kii.com',
+                  port: 443,
+                  path: '/thing-if/apps/'+ APP.ID + '/onboardings',
+                  method: 'POST',
+                  headers: {
+                    authorization: 'Bearer ' + kii.KiiUser.getCurrentUser().getAccessToken(),
+                    'content-type': 'application/vnd.kii.onboardingWithVendorThingIDByThing+json'
+                  }
+                });
+            req.write(JSON.stringify(
+                  {
+                    vendorThingID:vendorId,
+                    thingPassword:password
+                  }));
+            req.end();
+
+            req.on('response', function(res) {
+              console.log(ts(), 'thing onboarding status : ', res.statusCode);
+              if (res.statusCode != 200) {
+                reject('status code ' + res.statusCode);
+              }
+              var data = "";
+              res.on('data', function(chunk) {
+                data += chunk;
+              });
+              res.on('end', function() {
+                console.log(ts(), 'thing onboarded');
+                console.log(ts(), 'server response : ', data);
+                resolve(JSON.parse(data));
+              });
+              res.on('error', function(error) {
+                console.log(ts(), 'error while reading onboarding response', error);
+                reject(error);
+              });
+            });
+
+            req.on('aborted', function() {
+              reject('connection aborted by server');
+            });
+          })
+      , thing
+       ]);
+    });
 }
 
 function exponentialBackoff(name, fn, maxRetry, interval, retryCount) {
@@ -107,7 +128,6 @@ function startMonitor(thing, behavior) {
     if ((sec % 60) == 59) {
       behavior.generateState()
         .then(function(state) {
-            console.log(state);
           saveData(thing.getThingID(), state);
         }).catch(function(err) {
           console.log(ts(), "error while generating state", err);
@@ -119,7 +139,7 @@ function startMonitor(thing, behavior) {
 
 function saveData(thingId, state) {
   var path = '/thing-if/apps/'+ APP.ID + '/targets/thing:' + thingId + '/states';
-  console.log("path", path);
+  console.log(ts(), "reporting state : ", state);
   var req = https.request(
       {
         hostname: 'api-jp.kii.com',
@@ -132,30 +152,24 @@ function saveData(thingId, state) {
         }
       },
       function(res) {
-        console.log(ts(), 'post data status: ' + res.statusCode);
+        console.log(ts(), 'reported. server status ' + res.statusCode);
       });
-  var toType = function(obj) {
-        return ({}).toString.call(obj).match(/\s([a-zA-Z]+)/)[1].toLowerCase()
-  }
-  console.log("state type: ", toType(state));
-  console.log("state : ", state);
   req.write(JSON.stringify(state));
   req.end();
 }
 
 function startMQTT(onboard, behavior) {
-  var endpoint = onboard.mqttEndPoint;
-  // console.log("endpoint: ", endpoint);
+  var endpoint = onboard.mqttEndpoint;
   var mqtt    = require('mqtt');
   var client  = mqtt.connect('mqtt://' + endpoint.host + ':' + endpoint.port,
       {username:endpoint.username, password:endpoint.password, clientId:endpoint.mqttTopic} );
 
   client.on('error', function (error) {
-      console.error("MQTT error ", error);
+      console.error(ts(), "MQTT error ", error);
       });
 
   client.on('connect', function () {
-      console.log(ts(), "connected");
+      console.log(ts(), "connected to MQTT endpoint");
       client.subscribe(endpoint.mqttTopic);
       });
 
@@ -163,7 +177,7 @@ function startMQTT(onboard, behavior) {
       // message is Buffer 
       // message is like {"schema":"prototype","schemaVersion":1,"commandID":"03675d40-7509-11e6-b753-22000b07265b","actions":[{"mythingsAction":{"payload":"{\"test\":0}","id":1}}],"issuer":"user:d009f7a00022-5308-6e11-e443-0222ec98"}
       msgJSON = JSON.parse(message);
-      console.log(ts(), message.toString());
+      console.log(ts(), 'received command : ' , message.toString());
       behavior.consumeCommand(message);
     });
 }
@@ -175,7 +189,6 @@ exponentialBackoff('setup', function() {
   return setupThing(THING);
 }, 5, 1000).then(
   function(resp) {
-    console.log(ts(), resp);
     // behavior = require('./raspberry_pi');
     var behavior = require('./pc');
     behavior.setup();
