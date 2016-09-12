@@ -182,15 +182,19 @@ function startMQTT(onboard, behavior) {
     });
 }
 
-
 kii.Kii.initializeWithSite(APP.ID, APP.KEY, APP.SITE);
+
+var behavior_str = 'raspberry-pi';
+if (process.argv.length > 2) {
+  behavior_str = process.argv[2];
+}
+console.log(ts(), "using behavior : ", behavior_str);
+var behavior = require('./' + behavior_str + '.js');
 
 exponentialBackoff('setup', function() {
   return setupThing(THING);
 }, 5, 1000).then(
   function(resp) {
-    // behavior = require('./raspberry_pi');
-    var behavior = require('./pc');
     behavior.setup();
     startMQTT(resp[0], behavior);
     startMonitor(resp[1], behavior);
