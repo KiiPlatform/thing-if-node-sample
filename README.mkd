@@ -1,12 +1,6 @@
-# Thermal Monitor
-
-[BLECAST\_TM](http://www.robotsfx.com/robot/BLECAST_TM.html) + [Intel Edison](http://www.intel.co.jp/content/www/jp/ja/do-it-yourself/edison.html) + [Kii Cloud](http://jp.kii.com/) = Thermal Monitor
+# Thing-IF sample
+This sample demonstrates Kii's Thing-IF framework from Node.js.
 
 ## How to use.
 
-1. `git clone https://github.com/koron/thermal-monitor.git`
-2. `cd thermal-monitor`
-3. `npm install`
-4. `find -path '*noble*Release/hci-ble' -exec sudo setcap cap_net_raw+eip '{}' \;`
-5. Copy example/app.json and example/vender.json to current dir and edit.
-6. `NOBLE_REPORT_ALL_HCI_EVENTS=1 node main.js`
+TBD
