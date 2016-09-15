@@ -185,7 +185,7 @@ function startMQTT(onboard, behavior) {
 
 kii.Kii.initializeWithSite(APP.ID, APP.KEY, APP.SITE);
 
-var behavior_str = 'raspberry-pi';
+var behavior_str = 'raspberry_pi';
 if (process.argv.length > 2) {
   behavior_str = process.argv[2];
 }
