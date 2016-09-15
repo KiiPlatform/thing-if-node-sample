@@ -1,7 +1,0 @@
-#!/bin/sh
-
-curl -L https://github.com/koron/thermal-monitor/archive/master.zip -o thermal-monitor.zip
-unzip -q thermal-monitor.zip
-cp -R thermal-monitor-master/* thermal-monitor/
-rm -rf thermal-monitor-master
-rm -f thermal-monitor.zip
