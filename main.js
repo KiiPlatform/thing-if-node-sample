@@ -178,8 +178,8 @@ function startMQTT(onboard, behavior) {
       // message is Buffer 
       // message is like {"schema":"prototype","schemaVersion":1,"commandID":"03675d40-7509-11e6-b753-22000b07265b","actions":[{"mythingsAction":{"payload":"{\"test\":0}","id":1}}],"issuer":"user:d009f7a00022-5308-6e11-e443-0222ec98"}
       msgJSON = JSON.parse(message);
-      console.log(ts(), 'received command : ' , message.toString());
-      behavior.consumeCommand(message);
+      console.log(ts(), 'received command : ' , JSON.stringify(msgJSON));
+      behavior.consumeCommand(msgJSON);
     });
 }
 
