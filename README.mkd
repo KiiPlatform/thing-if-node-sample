@@ -38,6 +38,7 @@ $ node main.js pc
 
 ## Environments
 This program works in two setups: 
+
 1. raspberry Pi with BME280 module, uploads temperature and humidity as State. To use this mode, please execute the program `node main.js`
 1. normal PC, upload arbitrary JSON stored in `data.json` file. Please use `node main.js pc` for this mode.
 
