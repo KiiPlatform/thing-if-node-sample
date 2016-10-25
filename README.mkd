@@ -1,6 +1,48 @@
 # Thing-IF sample
-This sample demonstrates Kii's Thing-IF framework from Node.js.
+This sample demonstrates Kii's Thing-IF framework from Node.js (>= v0.10.35).
+
+This program uploads state every minutes, and accepts command via MQTT.
 
 ## How to use.
+You need to sign up to Kii's developer portal. Please check it from https://kii.com/. Once signed up, you will need the following.
 
-TBD
+1. create application and put the parameters in `app.json`
+1. create thing in the application, and put the credentials in `thing.json`
+
+```
+$ git clone https://github.com/KiiPlatform/thing-if-node-sample
+$ cd thing-if-node-sample
+$ cp example/* ./
+$ vim app.json # edit ID (appid), KEY (appkey) and SITE (JP, US, etc)
+$ vim thing.json # populate VENDOR_ID and PASSWORD of the thing
+$ npm install
+$ node main.js pc
+```
+
+`app.json` and `thing.json` should look like the following.
+```
+{
+  "ID": "your-app-id",
+  "KEY": "your-app-key",
+  "SITE": "US"
+}
+```
+
+```
+{
+  "VENDOR_ID": "thing-vendor-id",
+  "PASSWORD": "thing-password",
+  "TYPE": "anything"
+}
+```
+
+## Environments
+This program works in two setups: 
+1. raspberry Pi with BME280 module, uploads temperature and humidity as State. To use this mode, please execute the program `node main.js`
+1. normal PC, upload arbitrary JSON stored in `data.json` file. Please use `node main.js pc` for this mode.
+
+## Extending
+Please create a module like `pc.js` and invoke it as 
+```
+$ node main.js <your-module>
+```
